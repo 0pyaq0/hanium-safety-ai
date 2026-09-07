@@ -157,14 +157,23 @@
               </c:forEach>
             </div>
 
+            <!-- Local (undelivered) comments — 서버 저장 실패로 브라우저에만 남아있는 댓글 -->
+            <div id="localCommentsContainer" class="space-y-4 mb-5"></div>
+
             <!-- Comment input -->
-            <form method="post" action="${pageContext.request.contextPath}/report-board/${report.id}/comments" class="flex gap-2">
+            <form id="commentForm" method="post" action="${pageContext.request.contextPath}/report-board/${report.id}/comments" class="flex flex-col gap-2">
               <input type="hidden" name="${_csrf.parameterName}" value="${_csrf.token}"/>
-              <input type="text" name="content" placeholder="댓글을 입력하세요..."
-                class="flex-1 px-3 py-2.5 border border-gray-200 rounded text-sm focus:ring-2 focus:ring-[#1A2E44] focus:border-transparent outline-none"/>
-              <button type="submit" class="px-4 py-2.5 bg-[#1A2E44] text-white rounded hover:bg-[#0F2233] transition-colors">
-                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
-              </button>
+              <div class="flex gap-2">
+                <input type="text" name="content" id="fCommentContent" placeholder="댓글을 입력하세요..."
+                  class="flex-1 px-3 py-2.5 border border-gray-200 rounded text-sm focus:ring-2 focus:ring-[#1A2E44] focus:border-transparent outline-none"/>
+                <button type="submit" class="px-4 py-2.5 bg-[#1A2E44] text-white rounded hover:bg-[#0F2233] transition-colors">
+                  <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+                </button>
+              </div>
+              <label class="flex items-center gap-2 px-3 py-2 rounded border border-dashed border-orange-300 bg-orange-50 cursor-pointer">
+                <input type="checkbox" id="fCommentSimulateFail" class="w-3.5 h-3.5"/>
+                <span class="text-[11px] text-orange-800 leading-snug">🎬 데모: 서버 장애 시뮬레이션 (체크 시 저장 실패로 처리 → 이 브라우저에 임시 저장)</span>
+              </label>
             </form>
           </div>
 
@@ -248,6 +257,85 @@ function loadCurrentUser() {
     .catch(function () {});
 }
 loadCurrentUser();
+
+// --- 댓글 등록: 서버 우선, 실패 시(또는 데모 시뮬레이션) 브라우저 임시 저장 ---
+var REPORT_ID = ${report.id};
+var LOCAL_COMMENT_KEY = 'demoCommentQueue_' + REPORT_ID;
+
+function getLocalComments() {
+  try { return JSON.parse(localStorage.getItem(LOCAL_COMMENT_KEY) || '[]'); } catch (e) { return []; }
+}
+function queueLocalComment(content) {
+  var items = getLocalComments();
+  items.push({ id: 'demo-' + Date.now(), content: content, createdAt: new Date().toISOString() });
+  localStorage.setItem(LOCAL_COMMENT_KEY, JSON.stringify(items));
+}
+function removeLocalComment(id) {
+  localStorage.setItem(LOCAL_COMMENT_KEY, JSON.stringify(getLocalComments().filter(function (c) { return c.id !== id; })));
+}
+function escapeHtml(s) { var d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
+
+function renderLocalComments() {
+  var container = document.getElementById('localCommentsContainer');
+  if (!container) return;
+  var items = getLocalComments();
+  container.innerHTML = items.map(function (c) {
+    return '<div class="p-4 rounded border border-dashed border-orange-300 bg-orange-50">' +
+      '<div class="flex items-center gap-2 mb-2 flex-wrap">' +
+      '<div class="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold bg-orange-200 text-orange-800">나</div>' +
+      '<span class="text-sm font-semibold text-gray-900">나</span>' +
+      '<span class="text-[10px] px-2 py-0.5 rounded-full font-medium bg-amber-100 text-amber-800">임시 저장</span>' +
+      '<span class="text-[10px] px-2 py-0.5 rounded-full font-medium bg-amber-100 text-amber-800">브라우저 저장</span>' +
+      '<span class="text-xs text-gray-400 ml-auto">' + new Date(c.createdAt).toLocaleString() + ' · ' + c.id + '</span>' +
+      '</div>' +
+      '<p class="text-sm text-gray-700 leading-relaxed mb-2">' + escapeHtml(c.content) + '</p>' +
+      '<button type="button" onclick="retryLocalComment(\'' + c.id + '\')" class="text-xs font-medium px-3 py-1.5 bg-[#1A2E44] text-white rounded">재전송</button>' +
+      '</div>';
+  }).join('');
+}
+
+function submitCommentToServer(content) {
+  var form = document.getElementById('commentForm');
+  var formData = new FormData();
+  formData.append('${_csrf.parameterName}', '${_csrf.token}');
+  formData.append('content', content);
+  return fetch(form.action, { method: 'POST', body: formData, credentials: 'same-origin' })
+    .then(function (res) { if (!res.ok) throw new Error(); return res; });
+}
+
+function retryLocalComment(id) {
+  var item = getLocalComments().find(function (c) { return c.id === id; });
+  if (!item) return;
+  submitCommentToServer(item.content)
+    .then(function (res) { removeLocalComment(id); window.location.href = res.url; })
+    .catch(function () { alert('아직 서버에 연결할 수 없습니다.'); });
+}
+
+document.getElementById('commentForm').addEventListener('submit', function (e) {
+  e.preventDefault();
+  var input = document.getElementById('fCommentContent');
+  var content = input.value.trim();
+  if (!content) return;
+  var simulateFail = document.getElementById('fCommentSimulateFail').checked;
+
+  if (simulateFail) {
+    queueLocalComment(content);
+    input.value = '';
+    document.getElementById('fCommentSimulateFail').checked = false;
+    renderLocalComments();
+    return;
+  }
+
+  submitCommentToServer(content)
+    .then(function (res) { window.location.href = res.url; })
+    .catch(function () {
+      queueLocalComment(content);
+      input.value = '';
+      renderLocalComments();
+    });
+});
+
+renderLocalComments();
 </script>
 </body>
 </html>

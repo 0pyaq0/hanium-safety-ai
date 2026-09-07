@@ -89,6 +89,7 @@
               <th style="padding:9px 16px;border-bottom:none"></th>
             </tr>
           </thead>
+          <tbody id="localReportsContainer"></tbody>
           <tbody>
             <c:if test="${empty reports}">
               <tr><td colspan="9" style="padding:48px;text-align:center;color:#9CA3AF;font-size:13px">검색 결과가 없습니다.</td></tr>
@@ -200,6 +201,10 @@
       <div style="padding:10px 14px;background:#EFF6FF;border:1px solid #BFDBFE;border-radius:4px;font-size:12px;color:#1E40AF">
         신고 내용은 현장 안전 관리자 및 담당 부서에 전달됩니다. 익명 신고 시 신고자 정보는 보호됩니다.
       </div>
+      <label style="display:flex;align-items:center;gap:8px;padding:9px 12px;background:#FFF7ED;border:1px dashed #FDBA74;border-radius:4px;cursor:pointer">
+        <input type="checkbox" id="fSimulateFail" style="width:14px;height:14px;flex-shrink:0"/>
+        <span style="font-size:11px;color:#9A3412;line-height:1.4">🎬 데모: 서버 장애 시뮬레이션 (체크 시 저장 실패로 처리 → 이 브라우저에 임시 저장)</span>
+      </label>
       <div class="flex gap-2">
         <button type="button" onclick="closeModal()" style="flex:1;padding:9px;font-size:13px;background:white;color:#374151;border:1px solid #E5E7EB;border-radius:4px;cursor:pointer">취소</button>
         <button type="button" onclick="submitReport()" style="flex:1;padding:9px;font-size:13px;font-weight:600;background:#1A2E44;color:white;border:none;border-radius:4px;cursor:pointer">신고 접수</button>
@@ -233,6 +238,7 @@ function openModal() {
   document.getElementById('fCategory').value='SAFETY_VIOLATION';
   document.getElementById('fRisk').value='HIGH';
   document.getElementById('anonymousInput').value='true';
+  document.getElementById('fSimulateFail').checked=false;
   updateAnonUI();
   document.getElementById('reportModal').classList.remove('hidden');
 }
@@ -260,7 +266,38 @@ function submitReport() {
   const location = document.getElementById('fLocation').value.trim();
   const desc = document.getElementById('fDesc').value.trim();
   if (!title||!location||!desc) { showToast('제목, 위치, 내용을 모두 입력해주세요', true); return; }
-  document.getElementById('reportForm').submit();
+
+  const payload = {
+    title: title,
+    category: document.getElementById('fCategory').value,
+    riskLevel: document.getElementById('fRisk').value,
+    location: location,
+    description: desc,
+    anonymous: document.getElementById('anonymousInput').value === 'true'
+  };
+  const simulateFail = document.getElementById('fSimulateFail').checked;
+
+  if (simulateFail) {
+    queueLocalReport(payload);
+    closeModal();
+    showToast('서버 연결 실패 — 이 브라우저에 임시 저장했습니다');
+    renderLocalReports();
+    return;
+  }
+
+  const form = document.getElementById('reportForm');
+  const formData = new FormData(form);
+  fetch(form.action, { method: 'POST', body: formData, credentials: 'same-origin' })
+    .then(function (res) {
+      if (!res.ok) throw new Error('save-failed');
+      window.location.href = res.url;
+    })
+    .catch(function () {
+      queueLocalReport(payload);
+      closeModal();
+      showToast('서버 연결 실패 — 이 브라우저에 임시 저장했습니다');
+      renderLocalReports();
+    });
 }
 
 let toastTimer;
@@ -271,6 +308,68 @@ function showToast(msg) {
   clearTimeout(toastTimer);
   toastTimer = setTimeout(()=>el.classList.add('hidden'),3000);
 }
+
+// --- 신고 등록 실패 시 브라우저 임시 저장 (demo-* 항목, 서버엔 없음) ---
+var LOCAL_REPORT_KEY = 'demoReportQueue';
+var CATEGORY_LABEL = {SAFETY_VIOLATION:'안전 위반', DEFECTIVE_MATERIAL:'불량 자재', WORK_ENVIRONMENT:'작업 환경', ILLEGAL_SUBCONTRACT:'불법 하도급', ETC:'기타'};
+var RISK_LABEL = {HIGH:'높음', MEDIUM:'중간', LOW:'낮음'};
+
+function getLocalReports() {
+  try { return JSON.parse(localStorage.getItem(LOCAL_REPORT_KEY) || '[]'); } catch (e) { return []; }
+}
+function queueLocalReport(payload) {
+  var items = getLocalReports();
+  items.unshift(Object.assign({}, payload, { id: 'demo-' + Date.now(), createdAt: new Date().toISOString() }));
+  localStorage.setItem(LOCAL_REPORT_KEY, JSON.stringify(items));
+}
+function removeLocalReport(id) {
+  localStorage.setItem(LOCAL_REPORT_KEY, JSON.stringify(getLocalReports().filter(function (r) { return r.id !== id; })));
+}
+function escapeHtml(s) { var d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
+
+function renderLocalReports() {
+  var container = document.getElementById('localReportsContainer');
+  if (!container) return;
+  var items = getLocalReports();
+  container.innerHTML = items.map(function (r) {
+    return '<tr style="border-bottom:1px solid #FDE68A;background:#FFFBEB">' +
+      '<td style="padding:10px 16px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#D97706" stroke-width="2"><path d="M12 9v4M12 17h.01M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/></svg></td>' +
+      '<td style="padding:10px 16px;max-width:280px"><p style="font-weight:500;color:#0F172A;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + escapeHtml(r.title) + '</p>' +
+      '<p style="font-size:11px;color:#9CA3AF;margin-top:1px">' + (CATEGORY_LABEL[r.category] || r.category) + ' · ' + r.id + '</p></td>' +
+      '<td style="padding:10px 16px;font-size:12px;color:#6B7280">' + escapeHtml(r.location) + '</td>' +
+      '<td style="padding:10px 16px;font-size:12px;color:#6B7280">' + new Date(r.createdAt).toLocaleDateString() + '</td>' +
+      '<td style="padding:10px 16px"><span style="font-size:10px;font-weight:600;padding:1px 7px;border-radius:3px;background:#FEF2F2;color:#991B1B">' + (RISK_LABEL[r.riskLevel] || r.riskLevel) + '</span></td>' +
+      '<td style="padding:10px 16px"><div style="display:flex;gap:4px;flex-wrap:wrap">' +
+      '<span style="font-size:10px;font-weight:600;padding:2px 7px;border-radius:3px;background:#FEF3C7;color:#92400E">임시 저장</span>' +
+      '<span style="font-size:10px;font-weight:600;padding:2px 7px;border-radius:3px;background:#FEF3C7;color:#92400E">브라우저 저장</span></div></td>' +
+      '<td style="padding:10px 16px;font-size:12px;color:#D1D5DB">-</td>' +
+      '<td style="padding:10px 16px;font-size:12px;color:#6B7280">' + (r.anonymous ? '익명' : '나') + '</td>' +
+      '<td style="padding:10px 16px"><button type="button" onclick="retryLocalReport(\'' + r.id + '\')" style="padding:4px 10px;font-size:11px;font-weight:500;background:#1A2E44;color:white;border:none;border-radius:3px;cursor:pointer;white-space:nowrap">재전송</button></td>' +
+      '</tr>';
+  }).join('');
+}
+
+function retryLocalReport(id) {
+  var item = getLocalReports().find(function (r) { return r.id === id; });
+  if (!item) return;
+  var formData = new FormData();
+  formData.append('${_csrf.parameterName}', '${_csrf.token}');
+  formData.append('title', item.title);
+  formData.append('category', item.category);
+  formData.append('riskLevel', item.riskLevel);
+  formData.append('location', item.location);
+  formData.append('description', item.description);
+  formData.append('anonymous', item.anonymous);
+  fetch('${pageContext.request.contextPath}/report-board', { method: 'POST', body: formData, credentials: 'same-origin' })
+    .then(function (res) {
+      if (!res.ok) throw new Error();
+      removeLocalReport(id);
+      window.location.href = res.url;
+    })
+    .catch(function () { showToast('아직 서버에 연결할 수 없습니다'); });
+}
+
+renderLocalReports();
 </script>
 </body>
 </html>

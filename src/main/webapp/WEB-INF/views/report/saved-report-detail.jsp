@@ -39,6 +39,9 @@
           <button id="srdDeleteBtn" type="button" class="px-4 py-2 border border-red-200 text-red-600 rounded-lg text-sm hover:bg-red-50 bg-white flex items-center gap-2">
             <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v5"/><path d="M14 11v5"/></svg>삭제
           </button>
+          <button id="srdShareBtn" type="button" class="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg text-sm hover:bg-gray-50 bg-white flex items-center gap-2">
+            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>공유
+          </button>
           <button onclick="window.print()" class="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg text-sm hover:bg-gray-50 bg-white flex items-center gap-2">
             <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>PDF
           </button>
@@ -195,6 +198,22 @@ function srdDeleteCurrentReport() {
 }
 
 qs('#srdDeleteBtn').addEventListener('click', srdDeleteCurrentReport);
+qs('#srdShareBtn').addEventListener('click', srdCopyShareLink);
+
+function srdCopyShareLink() {
+  var url = window.location.href;
+  var done = function () {
+    var btn = qs('#srdShareBtn');
+    var original = btn.innerHTML;
+    btn.innerHTML = '<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>링크 복사됨';
+    setTimeout(function () { btn.innerHTML = original; }, 1800);
+  };
+  if (navigator.clipboard && window.isSecureContext) {
+    navigator.clipboard.writeText(url).then(done).catch(function () { window.prompt('아래 링크를 복사하세요 (Ctrl+C)', url); });
+  } else {
+    window.prompt('아래 링크를 복사하세요 (Ctrl+C)', url);
+  }
+}
 
 if (!reportId) {
   srdShowNotFound('보고서 번호가 없습니다.');
