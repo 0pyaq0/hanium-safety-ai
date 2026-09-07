@@ -1296,8 +1296,8 @@
     preventionPlan: '작업 전 위험성평가 시 개구부·단부 안전난간 설치 여부를 필수 확인 항목으로 반영',
     actionStatus: '조치완료',
     finalDecision: '적합',
-    beforePhoto: '/images/site-photos/safety-helmet-missing.png',
-    afterPhoto: '/images/site-photos/safety-helmet-missing-detected.png'
+    beforePhoto: '/images/site-photos/fall-risk-site.png',
+    afterPhoto: '/images/site-photos/fall-risk-site-detected.png'
   };
 
   qs('#aiAutoFillBtn').addEventListener('click', function () {

@@ -152,6 +152,23 @@ function srdRender(report) {
       '<p class="text-sm text-gray-700 pl-2 whitespace-pre-line">' + srdEsc(value) + '</p></div>';
   });
 
+  var photosHtml = '';
+  if (detail.beforePhoto || detail.afterPhoto) {
+    photosHtml = '<h3 class="text-sm font-bold text-gray-900 border-l-4 border-[#1A2E44] pl-2 mb-2 mt-6">조치 전·후 사진</h3>' +
+      '<div class="grid grid-cols-2 gap-4 mb-2">' +
+      ['beforePhoto', 'afterPhoto'].map(function (key, i) {
+        var label = i === 0 ? '조치 전' : '조치 후';
+        var src = detail[key];
+        return '<div class="border border-gray-200 rounded-lg overflow-hidden">' +
+          '<div class="text-xs font-semibold text-gray-600 bg-gray-50 px-3 py-1.5 border-b border-gray-200">' + label + '</div>' +
+          (src
+            ? '<img src="' + srdEsc(src) + '" alt="' + label + ' 사진" class="w-full h-48 object-cover"/>'
+            : '<div class="w-full h-48 flex items-center justify-center text-xs text-gray-400 bg-gray-50">사진 없음</div>') +
+          '</div>';
+      }).join('') +
+      '</div>';
+  }
+
   qs('#srdContent').innerHTML =
     '<div class="flex items-center justify-between text-xs text-gray-400 mb-4">' +
     '<span>문서번호: SM-' + report.id + '</span>' +
@@ -170,6 +187,7 @@ function srdRender(report) {
     '</tbody></table>' +
     (fieldsHtml ? '<h3 class="text-sm font-bold text-gray-900 border-l-4 border-[#1A2E44] pl-2 mb-2 mt-6">작성 내용</h3>' + fieldsHtml : '') +
     itemsRows +
+    photosHtml +
     '<div class="grid grid-cols-3 gap-4 mt-8 pt-4 border-t border-gray-100">' +
     ['작성자', '검토자', '승인자'].map(function (r) {
       return '<div class="border border-gray-200 rounded-xl p-4 text-center"><p class="text-xs font-semibold text-gray-700 mb-6">' + r + '</p><p class="text-[10px] text-gray-400 border-t border-gray-200 pt-1">(서명 또는 인)</p></div>';
