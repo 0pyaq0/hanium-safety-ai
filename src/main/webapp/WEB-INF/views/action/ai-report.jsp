@@ -146,6 +146,12 @@
   var RISK_COLOR = { HIGH: '#991B1B', MEDIUM: '#B45309', SAFE: '#166534' };
   var RISK_BG    = { HIGH: '#FEF2F2', MEDIUM: '#FFFBEB', SAFE: '#F0FDF4' };
 
+  // 조치관리(action-management.jsp)/조치 상세(report-detail.jsp)와 동일한 목업 조치 전·후 사진 매핑
+  var REAL_SITE_PHOTOS = { 53: '/images/site-photos/safety-helmet-missing.png', 54: '/images/site-photos/fall-risk-site.png' };
+  var DETECTED_SITE_PHOTOS = { 53: '/images/site-photos/safety-helmet-missing-detected.png', 54: '/images/site-photos/fall-risk-site-detected.png' };
+  function beforePhotoFor(id) { return REAL_SITE_PHOTOS[id] || ''; }
+  function afterPhotoFor(id) { return DETECTED_SITE_PHOTOS[id] || ''; }
+
   // React AIReportPage.tsx의 TEMPLATES 그대로. TBM은 전용 DocumentType(TBM_LOG)으로 저장하고,
   // 하청 조치확인서는 별도 타입이 없어 가장 가까운 조치결과보고서(ACTION_REPORT)로 매핑한다.
   var TEMPLATES = [
@@ -403,9 +409,21 @@
       if (a.location) lines.push('<span class="font-semibold text-gray-600">위치:</span> ' + esc(a.location));
       if (a.regulationRef) lines.push('<span class="font-semibold text-gray-600">관련법규:</span> ' + esc(a.regulationRef));
       if (a.description) lines.push('<span class="font-semibold text-gray-600">조치 내용:</span> ' + esc(a.description));
+      var before = beforePhotoFor(a.id);
+      var after = afterPhotoFor(a.id);
+      var photosBlock = (before || after)
+        ? '<div class="grid grid-cols-2 gap-2 mt-2">' +
+          [['조치 전', before], ['조치 후', after]].map(function (pair) {
+            return '<div class="border border-gray-200 rounded-lg overflow-hidden">' +
+              '<div class="text-[10px] font-semibold text-gray-500 bg-gray-50 px-2 py-1 border-b border-gray-100">' + pair[0] + '</div>' +
+              (pair[1] ? '<img src="' + esc(pair[1]) + '" alt="' + pair[0] + '" class="w-full h-28 object-cover"/>' : '<div class="w-full h-28 flex items-center justify-center text-[10px] text-gray-400 bg-gray-50">사진 없음</div>') +
+              '</div>';
+          }).join('') + '</div>'
+        : '';
       return '<div class="border border-gray-100 rounded-lg p-3 mb-2">' +
         '<p class="text-sm font-bold text-gray-900 mb-1">' + esc(a.title) + '</p>' +
-        '<div class="text-xs text-gray-600 space-y-0.5">' + lines.map(function (l) { return '<p>' + l + '</p>'; }).join('') + '</div></div>';
+        '<div class="text-xs text-gray-600 space-y-0.5">' + lines.map(function (l) { return '<p>' + l + '</p>'; }).join('') + '</div>' +
+        photosBlock + '</div>';
     }).join('');
 
     var draftFieldsHtml = '';
@@ -451,10 +469,15 @@
     var template = TEMPLATES.find(function (t) { return t.id === selectedTemplateId; });
     var btn = qs('#step4SaveBtn');
     btn.disabled = true;
+    var formData = Object.assign({}, draftData || {}, {
+      actionPhotos: selectedActionsList().map(function (a) {
+        return { id: a.id, title: a.title, beforePhoto: beforePhotoFor(a.id), afterPhoto: afterPhotoFor(a.id) };
+      })
+    });
     fetch('/api/documents', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ inspectionId: Number(INSPECTION_ID), docType: template.docType, formData: draftData || {}, aiGenerated: true })
+      body: JSON.stringify({ inspectionId: Number(INSPECTION_ID), docType: template.docType, formData: formData, aiGenerated: true })
     })
       .then(function (res) { if (!res.ok) throw new Error('저장에 실패했습니다.'); return res.json(); })
       .then(function () { alert('보고서가 저장되었습니다.'); })

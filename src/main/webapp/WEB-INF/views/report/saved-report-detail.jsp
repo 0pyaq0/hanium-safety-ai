@@ -152,21 +152,29 @@ function srdRender(report) {
       '<p class="text-sm text-gray-700 pl-2 whitespace-pre-line">' + srdEsc(value) + '</p></div>';
   });
 
-  var photosHtml = '';
-  if (detail.beforePhoto || detail.afterPhoto) {
-    photosHtml = '<h3 class="text-sm font-bold text-gray-900 border-l-4 border-[#1A2E44] pl-2 mb-2 mt-6">조치 전·후 사진</h3>' +
-      '<div class="grid grid-cols-2 gap-4 mb-2">' +
-      ['beforePhoto', 'afterPhoto'].map(function (key, i) {
-        var label = i === 0 ? '조치 전' : '조치 후';
-        var src = detail[key];
+  function srdPhotoPair(beforeSrc, afterSrc) {
+    return '<div class="grid grid-cols-2 gap-4 mb-2">' +
+      [['조치 전', beforeSrc], ['조치 후', afterSrc]].map(function (pair) {
         return '<div class="border border-gray-200 rounded-lg overflow-hidden">' +
-          '<div class="text-xs font-semibold text-gray-600 bg-gray-50 px-3 py-1.5 border-b border-gray-200">' + label + '</div>' +
-          (src
-            ? '<img src="' + srdEsc(src) + '" alt="' + label + ' 사진" class="w-full h-48 object-cover"/>'
+          '<div class="text-xs font-semibold text-gray-600 bg-gray-50 px-3 py-1.5 border-b border-gray-200">' + pair[0] + '</div>' +
+          (pair[1]
+            ? '<img src="' + srdEsc(pair[1]) + '" alt="' + pair[0] + ' 사진" class="w-full h-48 object-cover"/>'
             : '<div class="w-full h-48 flex items-center justify-center text-xs text-gray-400 bg-gray-50">사진 없음</div>') +
           '</div>';
       }).join('') +
       '</div>';
+  }
+
+  var photosHtml = '';
+  if (Array.isArray(detail.actionPhotos) && detail.actionPhotos.length) {
+    // AI 결과보고서 생성 마법사(여러 완료 조치를 한 보고서에 묶는 경우)에서 저장된 형태
+    photosHtml = '<h3 class="text-sm font-bold text-gray-900 border-l-4 border-[#1A2E44] pl-2 mb-2 mt-6">조치 전·후 사진</h3>' +
+      detail.actionPhotos.map(function (p) {
+        return '<p class="text-xs font-semibold text-gray-700 mb-1">' + srdEsc(p.title || ('#' + p.id)) + '</p>' + srdPhotoPair(p.beforePhoto, p.afterPhoto);
+      }).join('');
+  } else if (detail.beforePhoto || detail.afterPhoto) {
+    photosHtml = '<h3 class="text-sm font-bold text-gray-900 border-l-4 border-[#1A2E44] pl-2 mb-2 mt-6">조치 전·후 사진</h3>' +
+      srdPhotoPair(detail.beforePhoto, detail.afterPhoto);
   }
 
   qs('#srdContent').innerHTML =
